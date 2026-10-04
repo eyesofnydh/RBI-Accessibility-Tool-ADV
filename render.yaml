@@ -6,7 +6,9 @@ services:
   - type: web
     name: rbi-accessibility-tester
     runtime: docker            # built from the Dockerfile, which already contains Chromium
-    plan: 1c-2g                # 1 CPU, 2 GB RAM. Chromium needs the memory; the 512 MB plans are likely to run out.
+    plan: free                 # Free: 0.1 CPU, 512 MB RAM, sleeps after 15 minutes without visitors.
+                               # If tests crash or the service restarts mid-run, it has run out of memory:
+                               # change this to 1c-2g (1 CPU, 2 GB RAM, paid).
     region: singapore          # closest Render region to India
     healthCheckPath: /healthz
     autoDeployTrigger: commit  # redeploy on every push to the linked branch

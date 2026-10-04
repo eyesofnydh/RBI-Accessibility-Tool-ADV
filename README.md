@@ -91,7 +91,7 @@ What changes when it is hosted:
 Things to check before relying on it:
 
 - **Can Render reach the staging site?** If `stg-rbi.webc.in` only answers to your office network or VPN, a hosted copy cannot load it. Ask whoever runs staging to allow Render's outbound addresses (listed on the service's **Connect** menu), or keep running the tester on your own computer.
-- **Memory.** `render.yaml` asks for the 2 GB plan (`1c-2g`), which is a paid plan. Chromium is likely to run out of memory on the 512 MB plans.
+- **Memory.** `render.yaml` uses the free plan (0.1 CPU, 512 MB RAM). Chromium may run out of memory there, which shows as a test that stops or a service that restarts mid-run. Untick the heavy tests (Zoom, Small viewports, Windows High Contrast) or change `plan` to `1c-2g` (2 GB, paid). A free service also sleeps after 15 minutes without visitors and takes about a minute to wake.
 - **The Dockerfile's Playwright version must match `package.json`.** Both are 1.56.0. Change them together.
 - If you add a custom domain, add it to `A11Y_ALLOWED_HOSTS` (comma-separated). The `onrender.com` address is allowed automatically.
 
