@@ -1,0 +1,46 @@
+# Render Blueprint for the RBI accessibility tester.
+# This file must sit at the root of the Git repository, next to package.json and Dockerfile.
+# Reference: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: rbi-accessibility-tester
+    runtime: docker            # built from the Dockerfile, which already contains Chromium
+    plan: 1c-2g                # 1 CPU, 2 GB RAM. Chromium needs the memory; the 512 MB plans are likely to run out.
+    region: singapore          # closest Render region to India
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit  # redeploy on every push to the linked branch
+
+    envVars:
+      # Listen on all interfaces inside the container (the Dockerfile sets this too).
+      - key: A11Y_HOST
+        value: 0.0.0.0
+
+      # Sign-in for the tester itself. Everyone who opens the site is asked for this user and password.
+      # Render generates the password; read it in the dashboard under Environment, or replace it with your own.
+      - key: A11Y_APP_USER
+        value: tester
+      - key: A11Y_APP_PASSWORD
+        generateValue: true
+
+      # Only these sites may be tested from the hosted copy (sub-domains included).
+      - key: A11Y_ALLOWED_TARGETS
+        value: stg-rbi.webc.in,rbi.org.in
+
+      # Default page shown in the "Page address" box.
+      - key: TARGET_URL
+        value: https://stg-rbi.webc.in/
+
+      # Login of the staging site (HTTP Basic Auth). Render asks for these when the Blueprint is first created.
+      - key: A11Y_HTTP_USERNAME
+        sync: false
+      - key: A11Y_HTTP_PASSWORD
+        sync: false
+
+    # Optional: keep reports and screenshots across restarts and deploys.
+    # Without a disk the last report is lost whenever the service restarts or redeploys.
+    # A disk is a paid add-on, and a service with a disk cannot be scaled to more than one instance.
+    # disk:
+    #   name: reports
+    #   mountPath: /app/reports
+    #   sizeGB: 5

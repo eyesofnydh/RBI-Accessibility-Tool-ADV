@@ -4,10 +4,13 @@
  *   /report/     the dashboard of the last run
  *   /api/...     used by the start page
  *
- * It listens on 127.0.0.1 only, so nothing outside this computer can reach it.
+ * By default it listens on 127.0.0.1 only, so nothing outside this computer can reach it.
+ * To host it (for example on Render) set A11Y_HOST=0.0.0.0 and A11Y_APP_PASSWORD: the app then asks every visitor
+ * for that password, and refuses to start without one.
  * A password typed on the start page is kept in memory for that run and is never written to disk or to the log.
  */
 import { exec } from 'node:child_process';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -51,8 +54,32 @@ function startPage(): string {
 </html>`;
 }
 
+export interface AppOptions {
+  /** When set, every request (except /healthz) must sign in with this user and password (HTTP Basic Auth). */
+  user?: string;
+  password?: string;
+  /** Host names the app answers to besides localhost, e.g. ['my-app.onrender.com']. */
+  allowedHosts?: string[];
+  /** When set, only pages on these sites may be tested, e.g. ['stg-rbi.webc.in']. Sub-domains are included. */
+  allowedTargets?: string[];
+}
+
+/** Reads the hosting options from environment variables. */
+export function optionsFromEnv(env: NodeJS.ProcessEnv = process.env): AppOptions {
+  const list = (v?: string) => (v || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return {
+    user: env.A11Y_APP_USER || 'tester',
+    password: env.A11Y_APP_PASSWORD || '',
+    allowedHosts: [...list(env.A11Y_ALLOWED_HOSTS), ...list(env.RENDER_EXTERNAL_HOSTNAME)],
+    allowedTargets: list(env.A11Y_ALLOWED_TARGETS),
+  };
+}
+
+const same = (a: string, b: string): boolean => timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
+
 /** Builds the server. Exported so the tests can start it on a free port. */
-export function createApp(args: Record<string, string> = {}): http.Server {
+export function createApp(args: Record<string, string> = {}, opts: AppOptions = {}): http.Server {
+  const hostOk = (hostHeader: string): boolean => LOCAL.test(hostHeader) || (opts.allowedHosts || []).includes(hostHeader.replace(/:\d+$/, '').toLowerCase());
   const state: State = { running: false, stopRequested: false, target: '', pagesDone: 0, log: [], error: '', summary: null, problems: [] };
   let outDir = path.resolve(args.out || 'reports');
 
@@ -72,12 +99,15 @@ export function createApp(args: Record<string, string> = {}): http.Server {
     let parsed: URL;
     try { parsed = new URL(url); } catch { throw new Error('Enter the full page address, starting with https:// or http://'); }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('The address must start with https:// or http://');
+    const targets = opts.allowedTargets || [];
+    const allowed = (u: URL) => !targets.length || targets.some((t) => u.hostname.toLowerCase() === t || u.hostname.toLowerCase().endsWith('.' + t));
+    if (!allowed(parsed)) throw new Error(`This copy of the tester may only test: ${targets.join(', ')}.`);
     const mode = body.mode === 'crawl' ? 'crawl' : 'test';
 
     const config: A11yConfig = structuredClone(await loadConfig({ ...args }));
     config.baseUrl = parsed.href;
     const more = Array.isArray(body.urls) ? (body.urls as unknown[]).map((u) => String(u).trim()).filter(Boolean) : [];
-    for (const u of more) { try { const x = new URL(u); if (x.protocol !== 'http:' && x.protocol !== 'https:') throw new Error(); } catch { throw new Error(`"${u}" is not a full page address. Each line must start with https:// or http://`); } }
+    for (const u of more) { try { const x = new URL(u); if ((x.protocol !== 'http:' && x.protocol !== 'https:') || !allowed(x)) throw new Error(); } catch { throw new Error(`"${u}" is not a full page address. Each line must start with https:// or http://`); } }
     config.urls = [...new Set(more)].filter((u) => u !== parsed.href).slice(0, 500);
     outDir = path.resolve(config.output.dir);
     const tests = (body.tests || {}) as Record<string, unknown>;
@@ -110,9 +140,19 @@ export function createApp(args: Record<string, string> = {}): http.Server {
   return http.createServer(async (req, res) => {
     try {
       // Only this computer may use the app, and only pages served by the app may send it commands.
-      if (!LOCAL.test(req.headers.host || '')) { json(res, 403, { error: 'Local use only' }); return; }
+      const [pathOnly] = (req.url || '/').split('?');
+      if (req.method === 'GET' && pathOnly === '/healthz') { res.writeHead(200, { 'Content-Type': 'text/plain' }).end('ok'); return; } // for the host's health check
+      if (!hostOk(req.headers.host || '')) { json(res, 403, { error: 'This address is not allowed. Add it to A11Y_ALLOWED_HOSTS.' }); return; }
+      if (opts.password) {
+        const given = /^Basic (.+)$/.exec(req.headers.authorization || '');
+        const [u, ...rest] = given ? Buffer.from(given[1], 'base64').toString('utf8').split(':') : [''];
+        if (!given || !same(u, opts.user || 'tester') || !same(rest.join(':'), opts.password)) {
+          res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="RBI accessibility tester", charset="UTF-8"', 'Content-Type': 'text/plain' }).end('Sign in to use the accessibility tester.');
+          return;
+        }
+      }
       const origin = req.headers.origin;
-      if (req.method === 'POST' && origin && !LOCAL.test(origin.replace(/^https?:\/\//, ''))) { json(res, 403, { error: 'Requests from other sites are not allowed' }); return; }
+      if (req.method === 'POST' && origin && !hostOk(origin.replace(/^https?:\/\//, ''))) { json(res, 403, { error: 'Requests from other sites are not allowed' }); return; }
 
       const [pathname, query = ''] = (req.url || '/').split('?');
       if (req.method === 'GET' && pathname === '/') {
@@ -161,12 +201,24 @@ export function createApp(args: Record<string, string> = {}): http.Server {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = parseArgs(process.argv.slice(2));
   const port = Number(args.port || process.env.PORT || 4180);
-  const server = createApp(args);
+  const host = args.host || process.env.A11Y_HOST || '127.0.0.1';
+  const local = host === '127.0.0.1' || host === 'localhost';
+  const opts = optionsFromEnv();
+  if (!local && !opts.password) {
+    // Anyone who can reach the app can make it open web pages and can see the reports, so it must not be public without a password.
+    console.error('Refusing to start: A11Y_HOST makes the app reachable from other computers, but A11Y_APP_PASSWORD is not set.');
+    process.exit(1);
+  }
+  const server = createApp(args, opts);
   server.on('error', (e: NodeJS.ErrnoException) => {
     console.error(e.code === 'EADDRINUSE' ? `Port ${port} is already in use. Close the other copy, or run: npm start -- --port=4181` : e.message);
     process.exit(1);
   });
-  server.listen(port, '127.0.0.1', () => {
+  server.listen(port, host, () => {
+    if (!local) {
+      console.log(`RBI accessibility tester is listening on ${host}:${port}. Sign-in user: ${opts.user}. Allowed hosts: ${(opts.allowedHosts || []).join(', ') || 'localhost only'}.`);
+      return;
+    }
     const url = `http://localhost:${port}/`;
     console.log(`RBI accessibility tester is running at ${url}\nLeave this window open while you test. Press Ctrl+C to stop.`);
     if (!args['no-open']) exec(process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`, () => undefined);

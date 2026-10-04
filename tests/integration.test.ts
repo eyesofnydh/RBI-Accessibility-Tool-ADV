@@ -186,3 +186,35 @@ test('start page app: serves the form, refuses outside requests, runs a test and
     app.close();
   }
 });
+
+test('hosted mode: password sign-in, allowed hosts, allowed targets and the health check', async () => {
+  const app = createApp({ out: path.join(out, 'hosted') }, { user: 'tester', password: 's3cret/+=', allowedHosts: ['my-tester.onrender.com'], allowedTargets: ['stg-rbi.webc.in'] });
+  await new Promise<void>((r) => app.listen(0, '127.0.0.1', r));
+  const port = (app.address() as { port: number }).port;
+  const auth = 'Basic ' + Buffer.from('tester:s3cret/+=').toString('base64');
+  /** A request where the Host header can be chosen, as a browser on the hosted address would send it. */
+  const get = (p: string, headers: Record<string, string>) => new Promise<number>((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: p, headers }, (res) => { res.resume(); resolve(res.statusCode || 0); }).on('error', reject);
+  });
+  try {
+    assert.equal(await get('/healthz', { Host: 'anything.example' }), 200, 'the health check needs no sign-in');
+    assert.equal(await get('/', { Host: 'my-tester.onrender.com' }), 401, 'no password, no entry');
+    assert.equal(await get('/', { Host: 'my-tester.onrender.com', Authorization: 'Basic ' + Buffer.from('tester:wrong').toString('base64') }), 401);
+    assert.equal(await get('/', { Host: 'my-tester.onrender.com', Authorization: auth }), 200);
+    assert.equal(await get('/report/', { Host: 'my-tester.onrender.com' }), 401, 'reports are protected too');
+    assert.equal(await get('/', { Host: 'evil.example', Authorization: auth }), 403, 'unknown host names are refused');
+    const origin = `http://127.0.0.1:${port}`;
+    const run = (url: string) => fetch(origin + '/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: auth }, body: JSON.stringify({ url }) });
+    const refused = await run('https://example.org/');
+    assert.equal(refused.status, 400);
+    assert.match(((await refused.json()) as { error: string }).error, /may only test: stg-rbi\.webc\.in/);
+  } finally {
+    app.close();
+  }
+});
+
+test('hosting options are read from the environment', async () => {
+  const { optionsFromEnv } = await import('../src/app');
+  const o = optionsFromEnv({ A11Y_APP_PASSWORD: 'x', RENDER_EXTERNAL_HOSTNAME: 'My-App.onrender.com', A11Y_ALLOWED_TARGETS: 'stg-rbi.webc.in, rbi.org.in' });
+  assert.deepEqual([o.user, o.password, o.allowedHosts, o.allowedTargets], ['tester', 'x', ['my-app.onrender.com'], ['stg-rbi.webc.in', 'rbi.org.in']]);
+});

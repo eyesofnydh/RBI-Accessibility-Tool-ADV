@@ -29,7 +29,9 @@ export async function runAudit(config: A11yConfig, mode: 'test' | 'crawl', log: 
   mkdirSync(path.join(outDir, 'screenshots'), { recursive: true });
   resetIssueIds();
 
-  const browser = await playwright[config.browser].launch({ headless: config.headless });
+  // --disable-dev-shm-usage: containers (Docker, Render) give Chromium a very small /dev/shm, which makes it crash on large pages.
+  const args = config.browser === 'chromium' && process.platform === 'linux' ? ['--disable-dev-shm-usage'] : [];
+  const browser = await playwright[config.browser].launch({ headless: config.headless, args });
   const run: RunCtx = { config, browser, outDir, shotSeq: { n: 0 }, colors: new Map<string, ColorEntry>(), log };
   const pages: PageResult[] = [];
   const extraRules: Record<string, RuleMeta> = {};

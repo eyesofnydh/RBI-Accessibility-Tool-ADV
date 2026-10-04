@@ -68,6 +68,35 @@ Test names for `--only`, `--skip` and `--with`: `contrast, keyboard, focus, head
 
 On the small sample pages a full run takes 10 to 60 seconds per page; large pages will take longer. Use `--only` while working on one kind of issue.
 
+## Hosting on Render
+
+The tester can run on [Render](https://render.com) so the team opens it in a browser instead of installing it. Three files do this: `render.yaml` (the Render Blueprint), `Dockerfile` (the image, with Chromium inside) and `.dockerignore`.
+
+1. Put the project in a Git repository (GitHub, GitLab or Bitbucket). `render.yaml`, `Dockerfile` and `package.json` must be at the root of the repository. The `.env` file is not uploaded; `.gitignore` already leaves it out.
+2. In the Render dashboard choose **New > Blueprint** and pick the repository.
+3. Render asks for `A11Y_HTTP_USERNAME` and `A11Y_HTTP_PASSWORD`: enter the staging site login.
+4. When the deploy finishes, open the service's **Environment** page and copy the generated `A11Y_APP_PASSWORD`.
+5. Open the `onrender.com` address. Sign in with user `tester` and that password.
+
+What changes when it is hosted:
+
+| | On your computer | Hosted |
+|---|---|---|
+| Who can open it | Only you | Anyone with the address **and** the password |
+| Sign-in | None | User and password on every visit (`A11Y_APP_USER`, `A11Y_APP_PASSWORD`). The app refuses to start without a password. |
+| Sites it may test | Any | Only those in `A11Y_ALLOWED_TARGETS` (set to `stg-rbi.webc.in,rbi.org.in`) |
+| Reports | Stay in `reports/` | Lost when the service restarts or redeploys, unless you enable the `disk` block in `render.yaml` |
+| Runs at once | One | One (a second person sees "A test is already running") |
+
+Things to check before relying on it:
+
+- **Can Render reach the staging site?** If `stg-rbi.webc.in` only answers to your office network or VPN, a hosted copy cannot load it. Ask whoever runs staging to allow Render's outbound addresses (listed on the service's **Connect** menu), or keep running the tester on your own computer.
+- **Memory.** `render.yaml` asks for the 2 GB plan (`1c-2g`), which is a paid plan. Chromium is likely to run out of memory on the 512 MB plans.
+- **The Dockerfile's Playwright version must match `package.json`.** Both are 1.56.0. Change them together.
+- If you add a custom domain, add it to `A11Y_ALLOWED_HOSTS` (comma-separated). The `onrender.com` address is allowed automatically.
+
+The Dockerfile and `render.yaml` have not been built or deployed by me; the sign-in, allowed-host and allowed-site behaviour is covered by the automated tests.
+
 ## What you get
 
 ```text
