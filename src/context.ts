@@ -49,7 +49,10 @@ export async function openPage(run: RunCtx, page: Page, url: string, retry = tru
   const nav = run.config.navigation;
   const response = await page.goto(url, { waitUntil: nav.waitUntil, timeout: nav.timeoutMs });
   const status = response?.status() ?? 200;
-  if (status === 401 || status === 403) throw new Error(`The site refused access (HTTP ${status}). Check the username and password in the .env file or on the start page.`);
+  if (status === 401) throw new Error(run.config.auth.httpUsername
+    ? `The site rejected the username or password (HTTP 401). The tester sent the username "${run.config.auth.httpUsername}" and a password of ${(run.config.auth.httpPassword || '').length} characters. Check both for typing mistakes and extra spaces.`
+    : 'The site asks for a username and password (HTTP 401) and none was given. Put them in the .env file or type them in the "Site login" boxes on the start page.');
+  if (status === 403) throw new Error('The site refused this computer (HTTP 403). This is usually a network restriction (office network, VPN or an allowed-address list), not a wrong password.');
   if (status >= 400) throw new Error(`The server answered HTTP ${status} for ${url}, so there is no page to test.`);
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => undefined);
   if (nav.autoScroll) {

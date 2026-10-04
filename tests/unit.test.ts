@@ -57,6 +57,21 @@ test('table markup and list markup are optional: off by default, on with --with'
   assert.equal((await loadConfig({ config: 'no-such-file.ts' })).tests.tables, false);
 });
 
+test('passwords with special characters survive the .env file', async () => {
+  const { loadEnvFile } = await import('../src/config');
+  const { writeFileSync, mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const file = join(mkdtempSync(join(tmpdir(), 'env-')), '.env');
+  writeFileSync(file, '# comment\nA11Y_HTTP_USERNAME= rbi-user \nA11Y_HTTP_PASSWORD=ab#c$1=2 x\nQUOTED="p#ss word"\nKEEP=from-file\n');
+  const env: NodeJS.ProcessEnv = { KEEP: 'already-set' };
+  loadEnvFile(file, env);
+  assert.equal(env.A11Y_HTTP_USERNAME, 'rbi-user');
+  assert.equal(env.A11Y_HTTP_PASSWORD, 'ab#c$1=2 x');
+  assert.equal(env.QUOTED, 'p#ss word');
+  assert.equal(env.KEEP, 'already-set');
+});
+
 test('command-line options are parsed', () => {
   assert.deepEqual(parseArgs(['--url=https://x.org', '--headed', '--max-pages=5']), { url: 'https://x.org', headed: 'true', 'max-pages': '5' });
 });

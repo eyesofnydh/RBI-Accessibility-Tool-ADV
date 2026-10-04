@@ -151,11 +151,25 @@ export function parseArgs(argv: string[]): Record<string, string> {
   return out;
 }
 
+/**
+ * Reads KEY=value lines from a .env file into the environment.
+ * Everything after the first "=" is the value, so a password may contain #, $, = or spaces without quotes
+ * (Node's built-in reader would cut "abc#123" down to "abc"). Lines that start with # are comments.
+ * Variables that are already set are left alone.
+ */
+export function loadEnvFile(file: string, env: NodeJS.ProcessEnv = process.env): void {
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
+    if (!m || line.trim().startsWith('#')) continue;
+    let value = m[2].trim();
+    if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) value = value.slice(1, -1);
+    if (env[m[1]] === undefined) env[m[1]] = value;
+  }
+}
+
 /** Loads accessibility.config.ts, then applies environment variables and command-line options on top. */
 export async function loadConfig(args: Record<string, string>): Promise<A11yConfig> {
-  if (typeof (process as unknown as { loadEnvFile?: (p: string) => void }).loadEnvFile === 'function' && existsSync('.env')) {
-    try { (process as unknown as { loadEnvFile: (p: string) => void }).loadEnvFile('.env'); } catch { /* ignore a malformed .env */ }
-  }
+  if (existsSync('.env')) loadEnvFile('.env');
   const file = path.resolve(args.config || 'accessibility.config.ts');
   let user: UserConfig = {};
   if (existsSync(file)) user = ((await import(pathToFileURL(file).href)) as { default: UserConfig }).default || {};
