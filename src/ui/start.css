@@ -1,0 +1,25 @@
+/* Start page ("npm start"). Builds on the dashboard styles. */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 22px;margin-bottom:16px}
+.card h2{margin-top:0}
+fieldset{border:0;padding:0;margin:0;min-width:0}
+legend{font-weight:650;font-size:1.15rem;padding:0;margin-bottom:10px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-width:760px}
+.field label,.field .lab{font-weight:650}
+.field .hint{color:var(--muted);font-size:.87rem}
+input[type="url"],input[type="text"],input[type="password"],input[type="number"]{border:1px solid #7b869e;border-radius:5px;padding:8px 10px;background:#fff;width:100%}
+input[type="number"]{max-width:130px}
+textarea{border:1px solid #7b869e;border-radius:5px;padding:8px 10px;background:#fff;width:100%;font:inherit;color:inherit;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:flex-start}
+.choice{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.choice input{margin-top:5px}
+.choice small{display:block;color:var(--muted)}
+.tests{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px 22px}
+.run{font-size:1.05rem;padding:10px 26px}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+a.btn{text-decoration:none;display:inline-block}
+a.btn.primary{color:#fff}
+.error{color:var(--fail);font-weight:650}
+#log{height:300px;overflow:auto;background:#101a30;color:#e6ebf7;border-radius:6px;padding:12px 14px;margin:10px 0;font-size:.85rem;white-space:pre-wrap}
+.result{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin-top:8px}
+.result .big{font-size:1.25rem;font-weight:700}
+[hidden]{display:none !important}

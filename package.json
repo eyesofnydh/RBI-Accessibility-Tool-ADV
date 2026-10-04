@@ -1,0 +1,36 @@
+{
+  "name": "rbi-accessibility-tester",
+  "version": "2.0.0",
+  "description": "Automated and assisted WCAG 2.2 AA testing for the RBI website and similar large sites.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "start": "tsx src/app.ts",
+    "ui": "tsx src/app.ts",
+    "test:a11y": "tsx src/cli.ts test",
+    "crawl:a11y": "tsx src/cli.ts crawl",
+    "report": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/unit.test.ts tests/integration.test.ts",
+    "selftest": "tsx --test tests/unit.test.ts tests/integration.test.ts"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "axe-core": "^4.10.3",
+    "dom-accessibility-api": "^0.7.0",
+    "esbuild": "^0.25.0",
+    "playwright": "1.56.0",
+    "playwright-core": "1.56.0",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^5.6.0"
+  }
+}
